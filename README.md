@@ -5,7 +5,7 @@ A static HTML tool to help you convert an image into Minecraft map art in surviv
 
 First use Photopea (basically a free online photoshop made by a guy in Prague) to edit your image into 128x128 pixels and remove any transparency. Save it as png (preferred), gif (limited to 256 colors), or jpg (compression artifacts) to your desktop. You can actually load larger images but only the top left 128x128 pixels will be used.
 
-Change any options below like what blocks to exclude.
+Change any options, like what blocks to exclude.
 
 Use the "Select File..." link to select the file from your desktop to convert the colors to the nearest Minecraft map colors.
 
