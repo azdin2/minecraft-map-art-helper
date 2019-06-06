@@ -1,7 +1,7 @@
 # minecraft-map-art-helper
 A static HTML tool to help you convert an image into Minecraft map art in survival
 
-<a href="http://htmlpreview.github.com/?https://github.com/azdin2/minecraft-map-art-helper/blob/master/minecraft-map-art-helper.htm">Try it</a>
+<a href="http://htmlpreview.github.com/?https://github.com/azdin2/minecraft-map-art-helper/blob/master/minecraft-map-art-helper.htm" style="display: none; border: 1px solid #ccc; border-radius: 4px; padding: 15px;">Try it</a>
 
 First use Photopea (basically a free online photoshop made by a guy in Prague) to edit your image into 128x128 pixels and remove any transparency. Save it as png (preferred), gif (limited to 256 colors), or jpg (compression artifacts) to your desktop. You can actually load larger images but only the top left 128x128 pixels will be used.
 
