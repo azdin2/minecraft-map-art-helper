@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Minecraft Map Art Helper</title>
+
+	<style>
+	body {
+		font-family: arial;
+		min-width: 1290px;
+	}
+	#table td {
+		width: 10px;
+		height: 10px;
+	}
+	#table td:hover {
+		outline: 4px solid #ff8000;
+	}
+	#tooltip {
+		display: none;
+		position: absolute;
+		cursor: pointer;
+		width: 290px;
+		padding: 5px;
+		border-radius: 5px;
+		color: #fff;
+		background-color: rgba(0,0,0,0.8);
+	}
+	.caret-up {
+		width: 0; 
+		height: 0; 
+		border-left: 5px solid transparent;
+		border-right: 5px solid transparent;
+		border-bottom: 5px solid #000;
+	}
+	.caret-down {
+		width: 0; 
+		height: 0; 
+		border-left: 5px solid transparent;
+		border-right: 5px solid transparent;
+		border-top: 5px solid #000;
+	}
+	#colors_to_exclude {
+		background: #ededed;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 8px;
+	}
+	#colors_to_exclude:hover {
+		cursor: pointer;
+		background: #dedede;
+	}
+	</style>
+</head>
+<body>
+
+<h3 style="margin: 0;">Minecraft Map Art Helper <span style="font-size: 12px; color: #999;">v1.0 2019-06-06 by Azdin</span></h3>
+
+<table cellpadding="10">
+<tr>
+<td align="center" valign="top">
+	Original Image<br />
+	<canvas id="canvas" width="128" height="128" style="border: 1px solid #ccc; box-shadow: #ccc 2px 2px 5px;"></canvas>
+
+	<br />
+
+	<input type="file" accept="image/png,image/gif,image/jpeg" style="border: 1px solid #ccc; box-shadow: #ccc 2px 2px 5px; display: none;" id="uploadimage" /><!-- accept attribute does not work in Microsoft Edge but works in IE11 -->
+
+	<a href="" id="browse">Select File...</a>
+</td>
+<td>
+	First use <a href="https://www.photopea.com/">Photopea</a> (basically a free online photoshop made by a guy in Prague) to edit your image into 128x128 pixels and remove any transparency. Save it as png (preferred), gif (limited to 256 colors), or jpg (compression artifacts) to your desktop. You can actually load larger images but only the top left 128x128 pixels will be used.<br />
+	Change any options below like what blocks to exclude.<br />
+	Use the "Select File..." link to select the file from your desktop to convert the colors to the nearest <a href="https://minecraft.gamepedia.com/Map_item_format">Minecraft map colors</a>.<br />
+	<b>Note that this script can only do flat maps with 51 colors.</b> It is possible to have 153 colors using the staircase method but it significantly increases the complexity of making the map art so it has not been implemented.<br />
+	Once loaded, you can hover your mouse over a pixel to see the coordinates and block types.<br />
+	You can click on a pixel to highlight it and preserve your place while you go place blocks in game.<br />
+	If you then click on another pixel while holding shift, the pixels in a square between the two will be highlighted and the tooltip will be updated with the boxes' dimensions.<br />
+	Ideally your screen resolution is at least 1280x960 so you do not have to scroll sideways since each pixel is zoomed by 10 pixels.<br />
+	Block totals are shown in a table below the image.<br />
+	If you're using this script on a website, you can auto load an images by adding this to the end of the URL <b>?image=http://sameurl.com/images/image.png</b> or relative path: <b>?image=/images/image.png</b> but browsers block loading an image from another website and then trying to read its image data for security reasons.
+</td>
+</tr>
+</table>
+
+<p style="margin-top: 0;"><b>Options</b></p>
+
+<p>X: <input type="text" id="x_offset" size="8" /> Z: <input type="text" id="z_offset" size="8" /> If you enter the X,Z coordinates of the top left of where you're starting your map in game, then the tooltip X,Z coordinates will match.</p>
+
+<p><input type="checkbox" id="craigs_formula" /> <label for="craigs_formula">Use Craig's formula weights which apparently better match the human vision system (Red*0.30, Green*0.59, Blue*0.11)</label></p>
+
+<p><button id="colors_to_exclude"> <div id="caret" class="caret-up" style="display: inline-block;"></div> Select colors/blocks to exclude</button></p>
+
+<p style="display: none; border: 1px solid #ccc; border-radius: 4px; padding: 15px;" id="list_colors_to_exclude"></p>
+
+<table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse;" id="table"></table>
+
+<br /><br />
+
+<table border="1" cellpadding="10" cellspacing="0" style="border-collapse: collapse;" id="totals"></table>
+
+<div id="tooltip"></div>
+
+<script>
+
+var minecraft_colors = [{
+	'r':127,
+	'g':178,
+	'b':56,
+	'blocks':'Grass Block',
+	'total':0,
+	'exclude':0
+},{
+	'r':247,
+	'g':233,
+	'b':163,
+	'blocks':'Sand, Sandstone (plain, Smooth, Chiseled, Stairs, Slab), Birch Wood (vertical Log, Planks, Stairs, Slab), Mushroom Block with "pores" texture facing up, Bone Block, Glowstone, End Stone, End Stone Bricks',
+	'total':0,
+	'exclude':0
+},{
+	'r':199,
+	'g':199,
+	'b':199,
+	'blocks':'Mushroom Stem with "stem" texture facing up (broken in 1.13 and fixed in 1.14), Cobweb',
+	'total':0,
+	'exclude':0
+},{
+	'r':255,
+	'g':0,
+	'b':0,
+	'blocks':'TNT, Block of Redstone, Lava',
+	'total':0,
+	'exclude':0
+},{
+	'r':160,
+	'g':160,
+	'b':255,
+	'blocks':'Ice, Frosted Ice, Packed Ice',
+	'total':0,
+	'exclude':0
+},{
+	'r':167,
+	'g':167,
+	'b':167,
+	'blocks':'Block of Iron',
+	'total':0,
+	'exclude':0
+},{
+	'r':0,
+	'g':124,
+	'b':0,
+	'blocks':'Leaves',
+	'total':0,
+	'exclude':0
+},{
+	'r':255,
+	'g':255,
+	'b':255,
+	'blocks':'White Wool, Snow Block',
+	'total':0,
+	'exclude':0
+},{
+	'r':164,
+	'g':168,
+	'b':184,
+	'blocks':'Clay, Infested Block (Stone, Cobblestone, Stone Brick, Mossy Stone Brick, Cracked Stone Brick, Chiseled Stone Brick)',
+	'total':0,
+	'exclude':0
+},{
+	'r':151,
+	'g':109,
+	'b':77,
+	'blocks':'Jungle Wood (vertical Log, Planks, Stairs, Slab), Brown Mushroom Block with "cap" texture facing up, Dirt, Coarse Dirt, Jukebox, Granite (plain, Polished), Farmland, Grass Path',
+	'total':0,
+	'exclude':0
+},{
+	'r':112,
+	'g':112,
+	'b':112,
+	'blocks':'Cobblestone (block, Stairs, Slab), Stone (block, Slab), Stone Brick (plain, Cracked, Chiseled, Stairs, Slab), Moss Stone, Mossy Stone Bricks, Gravel, Andesite (plain, Polished), Ore (Coal, Iron, Gold, Redstone, Lapis Lazuli, Diamond, Emerald), Bedrock, Furnace, Dispenser, Dropper, Hopper, Observer, horizontal Acacia Log',
+	'total':0,
+	'exclude':0
+},{
+	'r':64,
+	'g':64,
+	'b':255,
+	'blocks':'Water',
+	'total':0,
+	'exclude':0
+},{
+	'r':143,
+	'g':119,
+	'b':72,
+	'blocks':'Oak Wood (vertical Log, Planks, Stairs, Slab), Crafting Table, Bookshelf, Note Block',
+	'total':0,
+	'exclude':0
+},{
+	'r':255,
+	'g':252,
+	'b':245,
+	'blocks':'Horizontal Birch Log, Diorite (plain, Polished), Quartz (Block, Chiseled, Pillar, Stairs, Slab), Sea Lantern',
+	'total':0,
+	'exclude':0
+},{
+	'r':216,
+	'g':127,
+	'b':51,
+	'blocks':'Acacia Wood (vertical Log, Planks, Stairs, Slab), Orange Wool, Orange Carpet, Pumpkin, Jack o\'Lantern, Red Sand, Red Sandstone (plain, Smooth, Chiseled, Stairs, Slab), Terracotta/Hardened Clay<br>1.12 Onwards: Orange Glazed Terracotta, Orange Concrete, Orange Concrete Powder<br>Before 1.12: Orange Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':178,
+	'g':76,
+	'b':216,
+	'blocks':'Purpur (Block, Pillar, Slab), Magenta Wool<br>1.12 Onwards: Magenta Glazed Terracotta, Magenta Concrete, Magenta Concrete Powder<br>Before 1.12: Magenta Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':102,
+	'g':153,
+	'b':216,
+	'blocks':'Light Blue Wool<br>1.12 Onwards: Light Blue Glazed Terracotta, Light Blue Concrete, Light Blue Concrete Powder<br>Before 1.12: Light Blue Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':229,
+	'g':229,
+	'b':51,
+	'blocks':'Hay Bale, Sponge, Wet Sponge, Yellow Wool<br>1.12 Onwards: Yellow Glazed Terracotta, Yellow Concrete, Yellow Concrete Powder<br>Before 1.12: Yellow Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':127,
+	'g':204,
+	'b':25,
+	'blocks':'Melon, Lime Wool<br>1.12 Onwards: Lime Glazed Terracotta, Lime Concrete, Lime Concrete Powder<br>Before 1.12: Lime Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':242,
+	'g':127,
+	'b':165,
+	'blocks':'Pink Wool<br>1.12 Onwards: Pink Glazed Terracotta, Pink Concrete, Pink Concrete Powder<br>Before 1.12: Pink Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':76,
+	'g':76,
+	'b':76,
+	'blocks':'Gray Wool<br>1.12 Onwards: Gray Glazed Terracotta, Gray Concrete, Gray Concrete Powder<br>Before 1.12: Gray Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':153,
+	'g':153,
+	'b':153,
+	'blocks':'Structure Block, Light Gray Wool<br>1.12 Onwards: Light Gray Glazed Terracotta, Light Gray Concrete, Light Gray Concrete Powder<br>Before 1.12: Light Gray Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':76,
+	'g':127,
+	'b':153,
+	'blocks':'Prismarine, Cyan Wool<br>1.12 Onwards: Cyan Glazed Terracotta, Cyan Concrete, Cyan Concrete Powder<br>Before 1.12: Cyan Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':127,
+	'g':63,
+	'b':178,
+	'blocks':'Repeating Command Block, Mycelium, Purple Wool<br>1.12 Onwards: Purple Glazed Terracotta, Purple Concrete, Purple Concrete Powder<br>Before 1.12: Purple Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':51,
+	'g':76,
+	'b':178,
+	'blocks':'Blue Wool<br>1.12 Onwards: Blue Glazed Terracotta, Blue Concrete, Blue Concrete Powder<br>Before 1.12: Blue Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':102,
+	'g':76,
+	'b':51,
+	'blocks':'Dark Oak Wood (vertical or horizontal Log, Planks, Stairs, Slab), horizontal Spruce Log, Impulse Command Block, Soul Sand, Brown Wool<br>1.12 Onwards: Brown Glazed Terracotta, Brown Concrete, Brown Concrete Powder<br>Before 1.12: Brown Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':102,
+	'g':127,
+	'b':51,
+	'blocks':'Chain Command Block, Green Wool<br>1.12 Onwards: Green Glazed Terracotta, Green Concrete, Green Concrete Powder<br>Before 1.12: Green Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':153,
+	'g':51,
+	'b':51,
+	'blocks':'Bricks (block, Slab, Stairs), Nether Wart Block, Red Wool<br>1.12 Onwards: Red Glazed Terracotta, Red Concrete, Red Concrete Powder<br>Before 1.12: Red Stained Hardened Clay, Red Mushroom Block with "cap" texture facing up',
+	'total':0,
+	'exclude':0
+},{
+	'r':25,
+	'g':25,
+	'b':25,
+	'blocks':'Block of Coal, Obsidian, Black Wool<br>1.12 Onwards: Black Glazed Terracotta, Black Concrete, Black Concrete Powder<br>Before 1.12: Black Stained Hardened Clay',
+	'total':0,
+	'exclude':0
+},{
+	'r':250,
+	'g':238,
+	'b':77,
+	'blocks':'Block of Gold',
+	'total':0,
+	'exclude':0
+},{
+	'r':92,
+	'g':219,
+	'b':213,
+	'blocks':'Block of Diamond, Prismarine Bricks, Dark Prismarine',
+	'total':0,
+	'exclude':0
+},{
+	'r':74,
+	'g':128,
+	'b':255,
+	'blocks':'Lapis Lazuli Block',
+	'total':0,
+	'exclude':0
+},{
+	'r':0,
+	'g':217,
+	'b':58,
+	'blocks':'Block of Emerald',
+	'total':0,
+	'exclude':0
+},{
+	'r':129,
+	'g':86,
+	'b':49,
+	'blocks':'Spruce Wood (vertical Log, Planks, Stairs, Slab), horizontal Oak Log, horizontal Jungle Log, Podzol',
+	'total':0,
+	'exclude':0
+},{
+	'r':112,
+	'g':2,
+	'b':0,
+	'blocks':'Netherrack, Nether Bricks, Nether Brick Stairs, Red Nether Bricks, Nether Quartz Ore, Magma Block',
+	'total':0,
+	'exclude':0
+},{
+	'r':209,
+	'g':177,
+	'b':161,
+	'blocks':'1.12 Onwards: White Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':159,
+	'g':82,
+	'b':36,
+	'blocks':'1.12 Onwards: Orange Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':149,
+	'g':87,
+	'b':108,
+	'blocks':'1.12 Onwards: Magenta Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':112,
+	'g':108,
+	'b':138,
+	'blocks':'1.12 Onwards: Light Blue Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':186,
+	'g':133,
+	'b':36,
+	'blocks':'1.12 Onwards: Yellow Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':103,
+	'g':117,
+	'b':53,
+	'blocks':'1.12 Onwards: Lime Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':160,
+	'g':77,
+	'b':78,
+	'blocks':'1.12 Onwards: Pink Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':57,
+	'g':41,
+	'b':35,
+	'blocks':'1.12 Onwards: Gray Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':135,
+	'g':107,
+	'b':98,
+	'blocks':'1.12 Onwards: Light Gray Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':87,
+	'g':92,
+	'b':92,
+	'blocks':'1.12 Onwards: Cyan Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':122,
+	'g':73,
+	'b':88,
+	'blocks':'1.12 Onwards: Purple Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':76,
+	'g':62,
+	'b':92,
+	'blocks':'1.12 Onwards: Blue Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':76,
+	'g':50,
+	'b':35,
+	'blocks':'1.12 Onwards: Brown Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':76,
+	'g':82,
+	'b':42,
+	'blocks':'1.12 Onwards: Green Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':142,
+	'g':60,
+	'b':46,
+	'blocks':'1.12 Onwards: Red Terracotta',
+	'total':0,
+	'exclude':0
+},{
+	'r':37,
+	'g':22,
+	'b':16,
+	'blocks':'1.12 Onwards: Black Terracotta',
+	'total':0,
+	'exclude':0
+}
+];
+
+function onChangeFileInput(event, url_image) {
+	var canvas = document.getElementById('canvas');
+	var ctx = canvas.getContext('2d');
+	var img = new Image();
+	var src;
+
+	// allow ?image= parameter. only works if loading images from same URL, tried to allow loading from URL but can't use canvas getImageData due to browser cross site security
+	if (url_image != null) {
+		src = url_image;
+	}
+	else {
+		var file = document.getElementById('uploadimage').files[0];
+		var url = window.URL;
+		src = url.createObjectURL(file);
+	}
+
+	img.src = src;
+	img.onload = function() {
+
+		// hide select colors menu
+		document.getElementById('list_colors_to_exclude').style.display = 'none';
+
+		// invert caret on select colors menu
+		document.getElementById('caret').className = 'caret-up';
+
+		// reset totals
+		for (var i = 0; i < minecraft_colors.length; i++) {
+			minecraft_colors[i].total = 0;
+		}
+
+		// reset image table
+		var table_remove = document.getElementById('table');
+		while (table_remove.hasChildNodes()) {
+			table_remove.removeChild(table_remove.lastChild);
+		}
+
+		// reset totals table
+		var totals_remove = document.getElementById('totals');
+		while (totals_remove.hasChildNodes()) {
+			totals_remove.removeChild(totals_remove.lastChild);
+		}
+
+		// put image on canvas
+		ctx.drawImage(img, 0, 0);
+//comment this out if calling draw on window resize
+		if (url != undefined) {
+			url.revokeObjectURL(src);
+		}
+
+		// read image data from canvas
+		var imgd = ctx.getImageData(0, 0, canvas.width, canvas.height);
+		var pix = imgd.data;
+
+		var ptr = 0;
+		var selected_cell;
+		var craigs_formula_weight_red = 1;
+		var craigs_formula_weight_green = 1;
+		var craigs_formula_weight_blue = 1;
+
+		if (document.getElementById('craigs_formula').checked) {
+			craigs_formula_weight_red = 0.3;
+			craigs_formula_weight_green = 0.59;
+			craigs_formula_weight_blue = 0.11;
+		}
+
+		// put image data into table
+		var table = document.getElementById('table');
+		for (var row_count = 0; row_count < 128; row_count++) {
+			var row = table.insertRow(-1);
+			for (var column_count = 0; column_count < 128; column_count++) {
+				var cell = row.insertCell(-1);
+
+				// put the cell's X,Y data into an attribute for quick lookup when finding the bounding box
+				cell.setAttribute('data-x', column_count+1);
+				cell.setAttribute('data-y', row_count+1);
+
+				// outline clicked pixel
+				cell.addEventListener('click', function() {
+					// remove outline of previously selected cell
+					if (selected_cell != undefined) {
+						selected_cell.style.outlineWidth = '0px';
+
+						var cells = document.getElementById('table').getElementsByTagName('td');
+
+						// clear outlines of boxed area
+						if (box_outlined) {
+							box_outlined = false;
+
+							for (var t = 0; t < cells.length; t++) {
+								if (cells[t].getAttribute('data-box-dimensions')) {
+									cells[t].style.outlineWidth = '0px';
+								}
+							}
+						}
+
+						// use this to skip clearing box outlines if no box exists to speed up pixel selection
+						box_outlined = true;
+
+						// draw outlines of boxed area if shift is pressed
+						if (keys_pressed[16]) {
+							// handle if a user clicked the second pixel in the positive direction or the negative
+							var clicked_data_x = parseInt(this.getAttribute('data-x'));
+							var previous_data_x = parseInt(selected_cell.getAttribute('data-x'));
+							var clicked_data_y = parseInt(this.getAttribute('data-y'));
+							var previous_data_y = parseInt(selected_cell.getAttribute('data-y'));
+
+							if (clicked_data_x < previous_data_x) {
+								var dx = previous_data_x - clicked_data_x + 1;
+								var start_x_value = clicked_data_x;
+								var end_x_value = previous_data_x;
+							}
+							else {
+								var dx = clicked_data_x - previous_data_x + 1;
+								var start_x_value = previous_data_x;
+								var end_x_value = clicked_data_x;
+							}
+
+							if (clicked_data_y < previous_data_y) {
+								var dy = previous_data_y - clicked_data_y + 1;
+								var start_y_value = clicked_data_y;
+								var end_y_value = previous_data_y;
+							}
+							else {
+								var dy = clicked_data_y - previous_data_y + 1;
+								var start_y_value = previous_data_y;
+								var end_y_value = clicked_data_y;
+							}
+
+							for (var c = start_x_value-1; c < end_x_value; c++) {
+								for (var y = start_y_value; y < end_y_value+1; y++) {
+									var index = c + (128*(y-1));
+									cells[index].style.outlineWidth = '1px';
+									cells[index].style.outlineStyle = 'solid';
+									cells[index].style.outlineColor = '#ff8000';
+									// add box dimensions to cell attribute
+									cells[index].setAttribute('data-box-dimensions', dx + 'x' + dy);
+								}
+							}
+							// hide the tooltip because it won't update with Box: data until mousemove
+							document.getElementById('tooltip').style.display = 'none';
+						}
+
+					}
+					this.style.outlineWidth = '4px';
+					this.style.outlineStyle = 'solid';
+					this.style.outlineColor = '#ff8000';
+					selected_cell = this;
+				}, false);
+
+				// set lowest_distance to something bigger than could ever be possible to start
+				var lowest_distance = 10000;
+				// best_color holds the index of the minecraft_colors array that has the lowest distance
+				var best_color = null;
+
+				// find the closest color in the minecraft palette
+				for (var i = 0; i < minecraft_colors.length; i++) {
+					// Eucledean distance and Craig's formula weights to better match the human vision system
+					// https://stackoverflow.com/questions/1847092/given-an-rgb-value-what-would-be-the-best-way-to-find-the-closest-match-in-the-d
+					if (!minecraft_colors[i].exclude) {
+						distance = Math.pow((pix[ptr] - minecraft_colors[i].r)*craigs_formula_weight_red, 2) + Math.pow((pix[ptr+1] - minecraft_colors[i].g)*craigs_formula_weight_green, 2) + Math.pow((pix[ptr+2] - minecraft_colors[i].b)*craigs_formula_weight_blue, 2);
+
+						if (distance < lowest_distance) {
+							lowest_distance = distance;
+							best_color = i;
+						}
+					}
+				}
+
+				// increment the total blocks of this type
+				minecraft_colors[best_color].total++;
+
+				// 4th element (ptr+3) is alpha, would use rgba()
+				cell.style.backgroundColor = 'rgb(' + minecraft_colors[best_color].r + ',' + minecraft_colors[best_color].g + ',' + minecraft_colors[best_color].b + ')';
+
+				// get X,Z offset options
+				var x_offset = 0;
+				var z_offset = 0;
+				if (document.getElementById('x_offset').value != '') {
+					x_offset = parseInt(document.getElementById('x_offset').value) - 1;
+				}
+
+				if (document.getElementById('z_offset').value != '') {
+					z_offset = parseInt(document.getElementById('z_offset').value) - 1;
+				}
+
+				// create custom tooltip rather than using the title attribute
+				var tt = 'Coords: ' + (column_count+1+x_offset) + ',' + (row_count+1+z_offset) + '<br>RGB: ' + minecraft_colors[best_color].r + ',' + minecraft_colors[best_color].g + ',' + minecraft_colors[best_color].b + '<br>' + minecraft_colors[best_color].blocks;
+				cell.setAttribute('data-tooltip', tt);
+
+				cell.addEventListener('mouseover', function(e) {
+					var d = document.getElementById('tooltip');
+					// draw it off screen and display it to get dimensions, then move it
+					d.style.left = '-1000px';
+					d.style.top = '0px';
+					d.innerHTML = this.getAttribute('data-tooltip');
+					if (this.getAttribute('data-box-dimensions')) {
+						d.innerHTML += '<br>Box: ' + this.getAttribute('data-box-dimensions');
+					}
+					d.style.display = 'block';
+
+					// begin moving tooltip to mouse position
+					var left = e.pageX - (d.getBoundingClientRect().width/2);
+					// do not let tooltip go off screen on the left
+					if (left < 0) {
+						left = 0;
+					}
+					// account for if the user has a low screen resolution and has scrolled to the right
+					if (window.pageXOffset > 0 && left < window.pageXOffset) {
+						left += window.pageXOffset;
+					}
+					d.style.left = left + 'px';
+
+					// do not let the tooltip go off the screen on the right
+					if (left + d.getBoundingClientRect().width > window.innerWidth + window.pageXOffset) {
+						// the -17px is the scrollbar width
+						d.style.left = (window.innerWidth + window.pageXOffset - d.getBoundingClientRect().width - 17) + 'px';
+					}
+
+					d.style.top = (e.pageY - d.getBoundingClientRect().height - 10) + 'px';
+					// end moving tooltip to mouse position
+
+					// add an event listener so if you mouseover the tooltip it hides so you can move your cursor up
+					d.addEventListener('mouseover', function() {
+						this.style.display = 'none';
+					});
+				});
+
+				// move to next pixel data
+				ptr+=4;
+			}
+		}
+
+		// calculate total blocks needed of each type and display in a table
+		var totals = document.getElementById('totals');
+
+		var row = totals.insertRow(-1);
+		var cell = row.insertCell(-1);
+		cell.colSpan = 2;
+		cell.innerHTML = 'Total blocks needed';
+
+		for (var i = 0; i < minecraft_colors.length; i++) {
+			if (minecraft_colors[i].total > 0) {
+				var row = totals.insertRow(-1);
+				var cell = row.insertCell(-1);
+				cell.innerHTML = minecraft_colors[i].total;
+				var cell = row.insertCell(-1);
+				cell.innerHTML = minecraft_colors[i].blocks;
+			}
+		}
+
+	}
+
+}
+
+document.getElementById('uploadimage').addEventListener('change', onChangeFileInput, false);
+
+// rather than use the file dialog, it is hidden and we simulate a click on it
+document.getElementById('browse').addEventListener('click', function(e) {
+	e.preventDefault();
+
+	document.getElementById('uploadimage').click();
+});
+
+// prevent the tooltip from getting stuck on screen when the mouse moves off the image table
+document.getElementById('table').addEventListener('mouseout', function() {
+	document.getElementById('tooltip').style.display = 'none';
+});
+
+// generate the colors/blocks to exclude section
+for (var i = 0; i < minecraft_colors.length; i++) {
+	var row = document.createElement('div');
+	var cb = document.createElement('input');
+	var color = document.createElement('span');
+	var desc = document.createElement('label');
+
+	cb.type = 'checkbox';
+	cb.id = 'cb_' + i;
+	cb.style.margin = '6px';
+	cb.className = 'cb';
+	cb.setAttribute('data-index', i);
+	cb.addEventListener('change', function() {
+		if (this.checked) {
+			minecraft_colors[this.getAttribute('data-index')].exclude = 1;
+		}
+		else {
+			minecraft_colors[this.getAttribute('data-index')].exclude = 0;
+		}
+	});
+
+	row.appendChild(cb);
+
+	color.style.display = 'inline-block';
+	color.style.width = '16px';
+	color.style.height = '16px';
+	color.style.outlineWidth = '1px';
+	color.style.outlineStyle = 'solid';
+	color.style.outlineColor = '#ccc';
+	color.style.backgroundColor = 'rgb(' + minecraft_colors[i].r + ',' + minecraft_colors[i].g + ',' + minecraft_colors[i].b + ')';
+	color.title = minecraft_colors[i].blocks;
+
+	row.style.marginBottom = '10px';
+	row.appendChild(color);
+
+	desc.setAttribute('for', 'cb_' + i);
+	desc.innerHTML = ' ' + minecraft_colors[i].blocks;
+
+	row.appendChild(desc);
+	document.getElementById('list_colors_to_exclude').appendChild(row);
+}
+
+document.getElementById('colors_to_exclude').addEventListener('click', function(e) {
+	e.preventDefault();
+
+	if (document.getElementById('caret').className == 'caret-up') {
+		document.getElementById('caret').className = 'caret-down';
+		document.getElementById('list_colors_to_exclude').style.display = 'block';
+	}
+	else {
+		// hide color list
+		document.getElementById('caret').className = 'caret-up';
+		document.getElementById('list_colors_to_exclude').style.display = 'none';
+	}
+});
+
+// this is for checking if shift is pressed in order to draw the bounding box
+var box_outlined = false;
+var keys_pressed = {};
+window.addEventListener('keydown', function(e) {
+	keys_pressed[e.keyCode] = true;
+});
+window.addEventListener('keyup', function(e) {
+	keys_pressed[e.keyCode] = false;
+});
+
+// if user had checked this, then reloaded the page, uncheck it
+document.getElementById('craigs_formula').checked = false;
+
+// if user had entered values, then reloaded the page, restore to defaults
+document.getElementById('x_offset').value = '';
+document.getElementById('z_offset').value = '';
+
+
+function getURLParameter(name) {
+	return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search) || [null, ''])[1].replace(/\+/g, '%20')) || null;
+}
+// allow ?image= parameter. only works if loading images from same URL, tried to allow loading from URL but can't use canvas getImageData due to browser cross site security
+window.addEventListener('load', function() {
+	// this method does not work on IE11: var url = new URL(window.location.href); var url_image = url.searchParams.get('image');
+	var url_image = decodeURIComponent((new RegExp('[?|&]image=' + '([^&;]+?)(&|#|;|$)').exec(location.search) || [null, ''])[1].replace(/\+/g, '%20')) || null
+	if (url_image != undefined && url_image != null) {
+		onChangeFileInput(null, url_image);
+	}
+});
+
+
+//window.addEventListener('resize', function() {
+//	onChangeFileInput();
+//});
+
+</script>
+</body>
+</html>
